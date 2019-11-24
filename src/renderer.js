@@ -22,10 +22,10 @@ class App extends React.Component{
 
     async fetchCookies(){
         const cookiesUser =  await cookies.get({name: 'username'})
-        const cookiesLogin = await cookies.get({name: 'loginToken'})
+        const cookiesLogin = await cookies.get({name: 'JSONWebtoken'})
         let username = cookiesUser.length > 0 ? cookiesUser[0].value : null
         let loginToken = cookiesLogin.length > 0 ? cookiesLogin[0].value : null
-        Promise.resolve({
+        return Promise.resolve({
             username,
             loginToken
         })
@@ -33,30 +33,31 @@ class App extends React.Component{
 
     constructor(props){
         super(props)
-        this.fetchCookies().then((res) => {
-            if(res && res.username && res.loginToken){
-                this.state = {
-                    url: "http://localhost:3000",
-                    showLoginBox: false,
-                    username: username,
-                    messages: []
-                }
-            }else{
-                this.state = {
-                    url: "http://localhost:3000",
-                    showLoginBox: true,
-                    username: "",
-                    messages: []
-                }
-            }
-        })
+ 
         this.state = {
             url: "http://localhost:3000",
-            showLoginBox: true,
+            showLoginBox: false,
+            showSignUpBox: true,
             username: "",
             messages: []
         }
+    }
+
+    componentWillMount(){
+        this.fetchCookies().then((res) => {
+            console.log('cookies', res)            
+        })
         this.initSocket()
+        this.io.on('new-message', (msg) => {
+            console.log('recieved message from server:', msg)
+            this.setState({
+                messages: [...this.state.messages, msg]
+            })
+        })
+    }
+
+    initSocket(){
+        this.io = io(this.state.url)
         ChatStore.on('new-message', (msg) =>{
             this.io.emit('new-message', msg)
             this.setState({
@@ -70,21 +71,6 @@ class App extends React.Component{
                 username: username
             })
         })
-
-        this.io.on('new-message', (msg) => {
-            console.log('recieved message from server:', msg)
-            this.setState({
-                messages: [...this.state.messages, msg]
-            })
-        })
-    }
-
-    componentWillMount(){
-
-    }
-
-    initSocket(){
-        this.io = io(this.state.url)
     }
 
     hideLoginBox(){
@@ -93,12 +79,33 @@ class App extends React.Component{
         })
     }
 
+    hideSignBox(){
+        this.setState({
+            showSignUpBox: false
+        })
+    }
+
+    showLoginBox(){
+        this.setState({
+            showLoginBox: true,
+            showSignUpBox: false
+        })
+    }
+
+    showSignUpBox(){
+        this.setState({
+            showSignUpBox: true,
+            showLoginBox: false
+        })
+    }
+
     render(){
         console.log('Main Component render')
-        console.log(this.state.messages)
         return( 
             <div className="flex-parent">
                 {this.state.showLoginBox && <LoginBox hideLoginBox={this.hideLoginBox.bind(this)}/>}
+                {this.state.showSignUpBox && <SignUp  showLoginBox={this.showLoginBox.bind(this)}/>}
+
                 <div className="flex-container-horz flex-grow">
                     <div id="side-area" className="col-md-4 flex-grow-2">
                         Side
@@ -204,7 +211,96 @@ class ChatInputBar extends React.Component{
 
     }
 }
+class SignUp extends React.Component{
+    constructor(props){
+        super(props)
+        this.state = {
+            email: '',
+            password: '',
+            username: ''
+        }
+    }
 
+    validateUserInput(){
+        if(this.email.value == ""){
+            alert('Please enter the email')
+            return false
+        }
+        if(this.username.value == ""){
+            alert('Please enter the username')
+            return false
+        }
+        if(this.password.value == ""){
+            alert('Please enter the password')
+            return false
+        }
+        return true
+    }
+
+    submitSignUp(){
+        if(validateUserInput()){
+            axios.post( 'http://localhost:3000/users/register', 
+                {
+                    username: this.username.value,
+                    password: this.password.value,
+                    email: this.email.value
+                },  
+            
+                {
+                    "content-type": "application/json"
+                }
+            )
+            .then((res) =>{
+                this.props.showLoginBox()
+
+            })
+            .catch((res) => {
+
+            })
+        }
+    }
+
+    render(){
+        return(
+            <div className="login-box">
+                <div className="login-box-container">
+                    <h3>
+                        Enter your email
+                    </h3>
+                    <input name="email" className="form-control" type="text" 
+                        placeholder="email"
+                        ref={(email) => this.email = email}
+                    />
+                    <h3>
+                        Enter your username
+                    </h3>
+                    <input name="username" className="form-control" type="text" 
+                        placeholder="username"
+                        ref={(username) => this.username=username}
+                    />
+                    <h3>
+                        Enter your Password
+                    </h3>
+                    <input name="password" className="form-control" type="password" 
+                        placeholder="password"
+                        ref={(password) => this.password=password}
+                    />
+                    <button type="button"
+                        className="btn btn-success btn-block"
+                        onClick={this.submitSignUp.bind(this)}
+                    >
+                        Sign Up    
+                    </button>
+                    <p>
+                        <a href='#' onClick={() => this.props.showLoginBox()}>
+                            Click to Sign In
+                        </a>
+                    </p>
+                </div>
+            </div>
+        )
+    }
+}
 class LoginBox extends React.Component {
     constructor(props){
         super(props)
@@ -224,29 +320,57 @@ class LoginBox extends React.Component {
             alert('Please enter the password')
             return
         }
-        axios.post( 'http://localhost:3000/users/login', {
-            headers: {
-                "content-type": "application/json"
-            },
-            data: {
+        axios.post( 'http://localhost:3000/users/login', 
+            {
                 username: this.username.value,
                 password: this.password.value
+            },  
+        
+            {
+                "content-type": "application/json"
             }
-        })
+            
+        )
         .then((res) => {
-            debugger
+            let expiration = new Date();
+            let hour = expiration.getHours();
+            hour = hour + 6;
+            expiration.setHours(hour)
             console.log(res)
             ChatStore.initUsername(this.username.value)
             this.props.hideLoginBox()
             cookies.set({
-                url: 'http://localhost:3000',
-                name: 'authorization',
-                value: res.data.token 
+                url: 'http://localhost',
+                name: 'JSONWebtoken',
+                domain: 'localhost',
+                value: res.data.token,
+                expirationDate: (Date.now() / 1000) + (7 * 24 * 3600)
+            }, (err) => {
+                console.log('err', err)
             })
+            .then(() => {
+                console.log('saved data succesfully')
+            }, (err) =>{
+                console.log('error')
+                console.debug(err)
+            })
+
             cookies.set({
+                url: 'http://localhost',
                 name: 'username',
-                value: this.username.value
+                value: res.data.username,
+                domain: 'localhost',
+                expirationDate: (Date.now() / 1000) + (7 * 24 * 3600)
             })
+            .then(() => {
+                console.log('saved data succesfully')
+            }, (err) =>{
+                console.log('error')
+                console.debug(err)
+            })
+        })
+        .catch((err) => {
+            debugger
         })
 
     }

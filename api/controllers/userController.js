@@ -3,17 +3,18 @@ const User = require('../models/user')
 exports.login = (req, res) => {
     User.findOne({username: req.body.username}).exec( async (err, user) => {
         content = {}
-        let status
+        let status, message
         if(user){
             const validLogin = await user.authenticate(req.body.password)
-            let message = "Login Successfully"
-            let status = 200
+            message = "Login Successfully"
+            status = 200
             if(!validLogin){
                 message = "Useranme/password is invalid."
                 status = 401
             }
             content = {
                 message,
+                username: req.body.username,
                 token: user.token
             }
         } else{
@@ -25,9 +26,7 @@ exports.login = (req, res) => {
             }
         }
         
-        res.status(status).json({
-            data: content,
-        })
+        res.status(status).json(content)
     })
 }
 
@@ -50,10 +49,8 @@ exports.register = (req, res) => {
         } else {
             res.json({
                 status: 200,
-                data: {
-                    message: 'Register Successfuly',
-                    user: user
-                }
+                message: 'Register Successfuly',
+                user: user
             })
         }
     })
