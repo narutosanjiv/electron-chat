@@ -19,6 +19,9 @@ class ChatStore extends EventEmitter {
         this.emit("new-message", msg)
         this.state.message.push(msg)
     }
+
+    
+
 }
 
 module.exports = new ChatStore()

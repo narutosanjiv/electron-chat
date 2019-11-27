@@ -2,8 +2,8 @@ const jwt = require('jsonwebtoken')
 
 
 exports.checkForAuthHeader = (req, res, next) => {
-    if(req.headers && req.headers.authorization && req.headers.authorization.split(' ')[0] == 'JWT'){
-        jwt.verify(req.headers.authorization.split(' ')[1], process.env.JSON_TOKEN_SECRET, (err, decoded) =>{
+    if(req.headers && req.headers.authentication && req.headers.authentication.split(' ')[0] == 'JWT'){
+        jwt.verify(req.headers.authentication.split(' ')[1], process.env.JSON_TOKEN_SECRET, (err, decoded) =>{
             if(err){
                 req.user = undefined
             }else{

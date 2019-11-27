@@ -7,6 +7,7 @@ const mongoose = require('mongoose')
 const port = process.env.PORT
 
 const { checkForAuthHeader } = require('../api/middleware/auth')
+const { addToConnectedUsers } = require('../api/users')
 
 mongoose.connect(process.env.MONGODB_URI, { useNewUrlParser: true })
 // support parsing of application/json type post data
@@ -30,7 +31,10 @@ io.on('connection',(socket) => {
         console.log('Broadcasting the new message from server: ', msg)
         socket.broadcast.emit('new-message', msg)
     })
-    
+    socket.on('connectedUser', (data) => {
+        addToConnectedUsers(data.username)
+        console.log('connected Username', data.username)
+    })
 })
 
 http.listen(port, () => {

@@ -11,6 +11,7 @@ import ReactDOM from 'react-dom'
 import ChatStore from './chat_store'
 
 import axios from 'axios'
+import { Popover, Position, Intent} from '@blueprintjs/core'
 
 let root = document.getElementById('root')
 
@@ -44,16 +45,28 @@ class App extends React.Component{
     }
 
     componentWillMount(){
+        let username=null, loginToken=null
         this.fetchCookies().then((res) => {
-            console.log('cookies', res)            
+            if(res && res.username && res.loginToken){
+               username = res.username
+                loginToken = res.loginToken
+                axios.defaults.headers.common['authentication'] = `JWT ${res.loginToken}`
+                this.initSocket()
+                ChatStore.initUsername(res.username)
+                this.hideLoginBox()
+                this.hideSignBox()
+                
+                this.io.on('new-message', (msg) => {
+                    console.log('recieved message from server:', msg)
+                    this.setState({
+                        messages: [...this.state.messages, msg]
+                    })
+                })
+                
+            }           
         })
-        this.initSocket()
-        this.io.on('new-message', (msg) => {
-            console.log('recieved message from server:', msg)
-            this.setState({
-                messages: [...this.state.messages, msg]
-            })
-        })
+       
+        
     }
 
     initSocket(){
@@ -70,6 +83,7 @@ class App extends React.Component{
                 ...this.state,
                 username: username
             })
+            this.io.emit('connectedUser', {username: username})
         })
     }
 
@@ -103,17 +117,101 @@ class App extends React.Component{
         console.log('Main Component render')
         return( 
             <div className="flex-parent">
-                {this.state.showLoginBox && <LoginBox hideLoginBox={this.hideLoginBox.bind(this)}/>}
+                {this.state.showLoginBox && <LoginBox hideLoginBox={this.hideLoginBox.bind(this)} showSignUpBox={this.showSignUpBox.bind(this)} />}
                 {this.state.showSignUpBox && <SignUp  showLoginBox={this.showLoginBox.bind(this)}/>}
 
                 <div className="flex-container-horz flex-grow">
-                    <div id="side-area" className="col-md-4 flex-grow-2">
-                        Side
-                    </div>
+                    {
+                        !!this.state.username? (
+                            <SideArea />
+        
+                        ) : ""
+                        
+                    }
                     <ChatContainer messages={this.state.messages} username={this.state.username}/>    
                 </div>
                 <ChatInputBar username={this.state.username} />
             </div>   
+        )
+    }
+}
+
+class SideArea extends React.Component{
+    constructor(props){
+        super(props)
+        this.state = {
+            users : [],
+            isSettingsOpen: false
+        }
+        this.isCancelled  = false
+    }
+
+    fetchConnectedUsers(){
+        axios.get( 'http://localhost:3000/users/get_connected')
+        .then((res) => {
+            if(!this.isCancelled){
+                console.log('connected users')
+                console.debug(res)
+                this.setState({
+                    users: res.connectedUsers
+                })
+            }
+        })
+        .catch((error) => {
+            console.log('failed to get connected users')
+            console.log(error)
+        })
+    }
+
+    componentWillMount(){
+        this.intervalId = setInterval(setTimeout(() => {
+            axios.get( 'http://localhost:3000/users/get_connected')
+            .then((res) => {
+                if(!this.isCancelled){
+                    console.log('connected users')
+                    console.debug(res)
+                    this.setState({
+                        users: res.data.connectedUsers
+                    })
+                }
+            })
+            .catch((error) => {
+                console.log('failed to get connected users')
+                console.log(error)
+            })
+        }, 50), 1000)
+    }
+
+    componentWillUnmount(){
+        this.isCancelled = true
+        clearInterval(this.intervalId)
+    }
+
+
+    render(){
+        console.log('connected components')
+        console.log(this.state)
+        return(
+            <div id="side-area" className="col-md-3 flex-grow-2">
+                <ConnectedUsers users={this.state.users} />
+                <Popover position={Position.RIGHT} isOpen={this.state.isSettingsOpen} content={
+                    <div className="settings-container">
+                        <div className="bordered-header"> 
+                            User Details
+                        </div>
+                        <div className="options-container">
+                            <div className="option">
+                                <button className="pt-button pt-intent-danger">
+                                    Logout
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                }>
+                    <span className="fa fa-cog fa-2x" onClick={() => { this.setState((prevState) => ({isSettingsOpen: !prevState.isSettingsOpen})) }}>
+                    </span>
+                </Popover>
+            </div> 
         )
     }
 }
@@ -228,6 +326,7 @@ class SignUp extends React.Component{
         }
         if(this.username.value == ""){
             alert('Please enter the username')
+
             return false
         }
         if(this.password.value == ""){
@@ -399,9 +498,39 @@ class LoginBox extends React.Component {
                     >
                         Login    
                     </button>
+                    <p>
+                    <a href='#' onClick={() => this.props.showSignUpBox()}>
+                        Click to SignUp
+                    </a>
+                </p>
                 </div>
             </div>
         )
 
     }
+}
+
+function ConnectedUsers(props){
+    console.log('props')
+    console.debug(props)
+    return(
+        <div className="connected-users">
+            <div className="bordered-header">
+                Online
+            </div>
+            <div className="users-container">
+                {
+                    props.users.length > 0 ?
+                    (
+                        props.users.map((username) => {
+                           return (<div className="text-center">
+                                { username }
+                            </div>)
+                        })
+                    ) : " No connected users"
+
+                }
+            </div>
+        </div>
+    )
 }

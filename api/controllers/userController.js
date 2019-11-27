@@ -1,5 +1,5 @@
 const User = require('../models/user')
-
+const { getConnectedUsers } = require('../users')
 exports.login = (req, res) => {
     User.findOne({username: req.body.username}).exec( async (err, user) => {
         content = {}
@@ -55,4 +55,11 @@ exports.register = (req, res) => {
         }
     })
     
+}
+
+exports.connectedUsers = (req, res) => {
+    res.status(200).json({
+        connectedUsers: getConnectedUsers()
+
+    })
 }
